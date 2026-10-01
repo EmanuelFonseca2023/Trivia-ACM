@@ -4,9 +4,14 @@ import { drawHero } from './hero.js';
 import { LevelBank } from './levels/index.js';
 import { QUESTIONS } from './questions/index.js';
 
-const VIEW_W = 960;
-const VIEW_H = 540;
+const DESKTOP_W = 960;
+const DESKTOP_H = 540;
 const TILE = 32;
+let viewW = DESKTOP_W;
+let viewH = DESKTOP_H;
+let cssW = DESKTOP_W;
+let cssH = DESKTOP_H;
+let dpr = 1;
 const GRAVITY = 0.44;
 const JUMP_V = -10.5;
 const MAX_FALL = 12;
@@ -20,13 +25,6 @@ const RANK_BLURB = {
 };
 
 const params = new URLSearchParams(globalThis.location.search);
-const dbg = {
-  on: params.has('debug') || params.has('hitbox'),
-  boxes: true,
-  god: false,
-  fly: false,
-};
-let fps = 60;
 const canvas = globalThis.document.getElementById('c');
 const ctx = canvas.getContext('2d');
 const frame = globalThis.document.getElementById('frame');
@@ -303,11 +301,12 @@ function startLevel(id) {
 }
 
 function updateCamera() {
-  const look = player.vx * 14;
-  let tx = player.x + player.w / 2 - VIEW_W / 2 + look;
-  let ty = player.y + player.h / 2 - VIEW_H / 2 - 24;
-  const maxX = level.w * TILE - VIEW_W;
-  const maxY = level.h * TILE - VIEW_H;
+  const look = player.vx * 14 * (viewW / DESKTOP_W);
+  const headroom = viewW < DESKTOP_W ? viewH * 0.12 : 24;
+  let tx = player.x + player.w / 2 - viewW / 2 + look;
+  let ty = player.y + player.h / 2 - viewH / 2 - headroom;
+  const maxX = level.w * TILE - viewW;
+  const maxY = level.h * TILE - viewH;
   tx = maxX < 0 ? maxX / 2 : clamp(tx, 0, maxX);
   ty = maxY < 0 ? maxY / 2 : clamp(ty, 0, maxY);
   const follow = glitchOn(run, 'lag-cam') ? 0.03 : 0.12;
@@ -521,7 +520,7 @@ function killEnemy(e) {
 }
 
 function hurtPlayer(fromX) {
-  if (dbg.god || dbg.fly || player.invuln > 0 || winning) return;
+  if (player.invuln > 0 || winning) return;
   player.invuln = 75;
   const dir = Math.sign((player.x + player.w / 2) - fromX) || -player.facing || 1;
   player.vx = dir * 4.4;
@@ -956,26 +955,6 @@ function updatePlay() {
     return;
   }
 
-  if (dbg.fly) {
-    const speed = 5.5;
-    player.vx = input.dir * speed;
-    player.vy = (input.jumpHeld ? -speed : 0) + (input.down ? speed : 0);
-    player.x += player.vx;
-    player.y += player.vy;
-    player.grounded = false;
-    player.pounding = false;
-    if (input.actionEdge) tryInteract();
-    if (level.exit && aabb(player, level.exit)) {
-      winning = 48;
-      player.vx = 0;
-      popup(player.x, player.y - 30, '¡DEPLOY!', '#b6ff6a');
-      AudioBus.win();
-    }
-    if (banner && banner.life > 0) banner.life--;
-    updateCamera();
-    return;
-  }
-
   let dropped = false;
   if (input.downEdge && player.grounded && canDropThrough()) {
     player.y += 12;
@@ -1042,7 +1021,7 @@ function updatePlay() {
   }
   if (player.invuln > 0) player.invuln--;
 
-  if (player.y > level.h * TILE + 24 && !dbg.god && !dbg.fly) respawn();
+  if (player.y > level.h * TILE + 24) respawn();
 
   updateEnemies();
   updateBoss();
@@ -1507,6 +1486,20 @@ function drawHatch(d) {
 function textWidth(line) {
   return Math.max(ctx.measureText(line).width, String(line).length * 7.6);
 }
+function wrapText(text, maxWidth) {
+  const words = String(text).split(' ');
+  const lines = [];
+  let cur = '';
+  for (const word of words) {
+    const next = cur ? cur + ' ' + word : word;
+    if (cur && ctx.measureText(next).width > maxWidth) {
+      lines.push(cur);
+      cur = word;
+    } else cur = next;
+  }
+  if (cur) lines.push(cur);
+  return lines.length ? lines : [''];
+}
 function drawSigns() {
   let best = null;
   let bestD = 999;
@@ -1527,14 +1520,16 @@ function drawSigns() {
     if (dist < bestD) { best = s; bestD = dist; }
   }
   if (!best || bestD > 130) return;
-  const lines = best.lines;
   ctx.font = '800 15px Nunito, sans-serif';
   ctx.textAlign = 'left';
-  const bw = Math.max(160, ...lines.map((line) => textWidth(line))) + 28;
+  const maxW = viewW < DESKTOP_W ? Math.max(150, viewW * 0.72) : viewW - 24;
+  const lines = best.lines.flatMap((line) => wrapText(line, maxW - 28));
+  const bw = Math.min(maxW, Math.max(120, ...lines.map((line) => textWidth(line))) + 28);
   const bh = 16 + lines.length * 20;
   let left = best.x + 8 - bw / 2;
-  left = Math.max(cam.x + 10, Math.min(left, cam.x + VIEW_W - bw - 10));
-  const top = Math.max(cam.y + 8, best.y - 78 - bh);
+  left = Math.max(cam.x + 8, Math.min(left, cam.x + viewW - bw - 8));
+  let top = best.y - 78 - bh;
+  top = Math.max(cam.y + 8, Math.min(top, cam.y + viewH - bh - 8));
   ctx.fillStyle = '#fff6e4';
   ctx.strokeStyle = '#1c0c08';
   ctx.lineWidth = 3;
@@ -1598,50 +1593,68 @@ function drawMarkers() {
       ctx.textAlign = 'center';
       ctx.fillText(m.t, m.x, m.y);
     } else if (m.kind === 'plaque') {
-      const lines = m.lines || [];
+      const maxW = viewW < DESKTOP_W ? Math.max(140, viewW * 0.7) : viewW - 24;
       ctx.font = '800 13px Nunito, sans-serif';
-      const bw = Math.max(120, textWidth(m.title || '') + 16, ...lines.map((line) => textWidth(line) + 16));
+      const lines = (m.lines || []).flatMap((line) => wrapText(line, maxW - 16));
+      const bw = Math.min(maxW, Math.max(120, textWidth(m.title || '') + 16, ...lines.map((line) => textWidth(line) + 16)));
       const bh = 26 + lines.length * 16;
-      const x = m.x;
-      if (x + bw < cam.x - 20 || x > cam.x + VIEW_W + 20) continue;
-      if (m.y < cam.y - 20 || m.y - bh > cam.y + VIEW_H + 20) continue;
+      let x = m.x;
+      let y = m.y;
+      if (viewW < DESKTOP_W) {
+        x = Math.max(cam.x + 8, Math.min(x, cam.x + viewW - bw - 8));
+        const padTop = viewH > viewW ? 108 : 16;
+        if (y - bh < cam.y + padTop) y = cam.y + padTop + bh;
+        if (y > cam.y + viewH - 8) y = cam.y + viewH - 8;
+      }
+      if (x + bw < cam.x - 20 || x > cam.x + viewW + 20) continue;
+      if (y < cam.y - 20 || y - bh > cam.y + viewH + 20) continue;
       ctx.fillStyle = '#fff6e4';
       ctx.strokeStyle = '#1c0c08';
       ctx.lineWidth = 3;
-      round(x, m.y - bh, bw, bh, 8);
+      round(x, y - bh, bw, bh, 8);
       ctx.fill();
       ctx.stroke();
       ctx.textAlign = 'left';
       ctx.fillStyle = '#8a3d12';
-      ctx.fillText(m.title || '', x + 8, m.y - bh + 16);
+      ctx.fillText(m.title || '', x + 8, y - bh + 16);
       ctx.fillStyle = '#1c0c08';
       ctx.font = '800 12px Nunito, sans-serif';
-      lines.forEach((line, i) => ctx.fillText(line, x + 8, m.y - bh + 32 + i * 16));
+      lines.forEach((line, i) => ctx.fillText(line, x + 8, y - bh + 32 + i * 16));
     }
   }
+}
+function useScreen() {
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+}
+function useWorld(sx, sy) {
+  const z = cssW / viewW;
+  ctx.setTransform(dpr * z, 0, 0, dpr * z, (sx || 0) * dpr, (sy || 0) * dpr);
 }
 function drawBackdrop() {
   const sky = level.sky || { top: '#4b2a78', mid: '#241433', bot: '#140810' };
   const hues = level.hues || ['#2a1848', '#1b2744', '#3a1844'];
-  const g = ctx.createLinearGradient(0, 0, 0, VIEW_H);
+  ctx.save();
+  useWorld(0, 0);
+  const g = ctx.createLinearGradient(0, 0, 0, viewH);
   g.addColorStop(0, sky.top);
   g.addColorStop(0.55, sky.mid);
   g.addColorStop(1, sky.bot);
   ctx.fillStyle = g;
-  ctx.fillRect(0, 0, VIEW_W, VIEW_H);
+  ctx.fillRect(0, 0, viewW, viewH);
   const par = cam.x * 0.32;
   for (const b of level.bg) {
     const dx = b.x - par;
-    if (dx > VIEW_W + 20 || dx + b.w < -20) continue;
+    if (dx > viewW + 20 || dx + b.w < -20) continue;
     ctx.fillStyle = hues[b.hue % hues.length];
-    ctx.fillRect(dx, VIEW_H - b.h, b.w, b.h);
+    ctx.fillRect(dx, viewH - b.h, b.w, b.h);
     ctx.fillStyle = 'rgba(255, 220, 120, .33)';
-    for (let wy = VIEW_H - b.h + 12; wy < VIEW_H - 16; wy += 18) {
+    for (let wy = viewH - b.h + 12; wy < viewH - 16; wy += 18) {
       for (let wx = dx + 8; wx < dx + b.w - 10; wx += 16) {
         if (hash(wx | 0, wy | 0) % 4 === 0) ctx.fillRect(wx, wy, 7, 5);
       }
     }
   }
+  ctx.restore();
 }
 function drawLevel() {
   drawBackdrop();
@@ -1649,7 +1662,8 @@ function drawLevel() {
   const sx = (trauma ? (Math.random() * 2 - 1) * mag : 0) + kickX;
   const sy = (trauma ? (Math.random() * 2 - 1) * mag : 0) + kickY;
   ctx.save();
-  ctx.translate(-Math.round(cam.x) + sx, -Math.round(cam.y) + sy);
+  useWorld(sx, sy);
+  ctx.translate(-Math.round(cam.x), -Math.round(cam.y));
   if (level.glyphs) {
     ctx.globalAlpha = 0.16;
     ctx.fillStyle = '#fff';
@@ -1661,8 +1675,8 @@ function drawLevel() {
   drawLava();
   const x0 = Math.max(0, Math.floor(cam.x / TILE) - 2);
   const y0 = Math.max(0, Math.floor(cam.y / TILE) - 2);
-  const x1 = Math.min(level.w - 1, Math.floor((cam.x + VIEW_W) / TILE) + 2);
-  const y1 = Math.min(level.h - 1, Math.floor((cam.y + VIEW_H) / TILE) + 2);
+  const x1 = Math.min(level.w - 1, Math.floor((cam.x + viewW) / TILE) + 2);
+  const y1 = Math.min(level.h - 1, Math.floor((cam.y + viewH) / TILE) + 2);
   for (let ty = y0; ty <= y1; ty++) {
     for (let tx = x0; tx <= x1; tx++) {
       const cell = level.grid[ty][tx];
@@ -1703,48 +1717,18 @@ function drawLevel() {
   }
   ctx.globalAlpha = 1;
   ctx.textAlign = 'left';
-  if (dbg.on && dbg.boxes && player && level) {
-    ctx.lineWidth = 1;
-    ctx.strokeStyle = '#0ff';
-    ctx.strokeRect(player.x, player.y, player.w, player.h);
-    ctx.strokeStyle = '#ff0';
-    ctx.strokeRect(checkpoint.x, checkpoint.y, player.w, player.h);
-    for (const d of level.doors) {
-      ctx.strokeStyle = d.open ? '#0f0' : '#f3f';
-      ctx.strokeRect(d.tx * TILE, d.ty * TILE, d.tw * TILE, d.th * TILE);
-    }
-    for (const e of level.enemies) {
-      ctx.strokeStyle = e.dead ? '#555' : '#f80';
-      ctx.strokeRect(e.x, e.y, e.w, e.h);
-    }
-    for (const c of level.coffees) {
-      ctx.strokeStyle = c.got ? '#555' : '#fd0';
-      ctx.strokeRect(c.x, c.y, c.w, c.h);
-    }
-    if (level.exit) {
-      ctx.strokeStyle = '#6f6';
-      ctx.strokeRect(level.exit.x, level.exit.y, level.exit.w, level.exit.h);
-    }
-    if (level.terminal) {
-      ctx.strokeStyle = '#fff';
-      ctx.strokeRect(level.terminal.x, level.terminal.y, level.terminal.w, level.terminal.h);
-    }
-    if (level.boss) {
-      ctx.strokeStyle = '#f44';
-      ctx.strokeRect(level.boss.x, level.boss.y, level.boss.w, level.boss.h);
-    }
-  }
   ctx.restore();
-  if (banner && banner.life > 0) {
+  useScreen();
+  if (banner && banner.life > 0 && viewW >= DESKTOP_W) {
     ctx.save();
     ctx.globalAlpha = Math.min(1, banner.life / 24);
     ctx.font = '40px "Lilita One", Nunito, sans-serif';
     ctx.textAlign = 'center';
     ctx.lineWidth = 6;
     ctx.strokeStyle = '#1c0c08';
-    ctx.strokeText(banner.text, VIEW_W / 2, 132);
+    ctx.strokeText(banner.text, cssW / 2, Math.min(132, cssH * 0.24));
     ctx.fillStyle = '#ffe14a';
-    ctx.fillText(banner.text, VIEW_W / 2, 132);
+    ctx.fillText(banner.text, cssW / 2, Math.min(132, cssH * 0.24));
     ctx.restore();
   }
   if (player && state === 'play' && player.mach > 0.74) {
@@ -1754,8 +1738,8 @@ function drawLevel() {
     ctx.lineWidth = 2;
     const dir = player.facing || 1;
     for (let i = 0; i < 12; i++) {
-      const y = hash(i, 4) % VIEW_H;
-      const x = (hash(i, 7) + tick * 22) % (VIEW_W + 160) - 80;
+      const y = hash(i, 4) % cssH;
+      const x = (hash(i, 7) + tick * 22) % (cssW + 160) - 80;
       ctx.beginPath();
       ctx.moveTo(x, y);
       ctx.lineTo(x - dir * (30 + player.mach * 70), y + ((i % 3) - 1));
@@ -1767,16 +1751,17 @@ function drawLevel() {
     ctx.save();
     ctx.globalAlpha = Math.min(0.65, flash.a);
     ctx.fillStyle = flash.color;
-    ctx.fillRect(0, 0, VIEW_W, VIEW_H);
+    ctx.fillRect(0, 0, cssW, cssH);
     ctx.restore();
   }
 }
 function drawTitle() {
-  const g = ctx.createLinearGradient(0, 0, 0, VIEW_H);
+  useScreen();
+  const g = ctx.createLinearGradient(0, 0, 0, cssH);
   g.addColorStop(0, '#5a32a8');
   g.addColorStop(1, '#1a0c18');
   ctx.fillStyle = g;
-  ctx.fillRect(0, 0, VIEW_W, VIEW_H);
+  ctx.fillRect(0, 0, cssW, cssH);
   for (let i = 0; i < 7; i++) {
     const x = ((i * 190 - tick * 0.7) % 1200 + 1200) % 1200 - 100;
     ctx.fillStyle = i % 2 ? '#2a1848' : '#1c2748';
@@ -1832,11 +1817,10 @@ function syncHud() {
 
 function draw() {
   ctx.setTransform(1, 0, 0, 1, 0, 0);
-  ctx.clearRect(0, 0, VIEW_W, VIEW_H);
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
   if (state === 'title' || !level) drawTitle();
   else drawLevel();
   if (state === 'play') syncHud();
-  syncDebug();
   frame.classList.toggle('turbo', !!(player && state === 'play' && player.mach > 0.8));
 }
 
@@ -1972,11 +1956,6 @@ function bindInput() {
     });
     btn.addEventListener('contextmenu', (e) => e.preventDefault());
   });
-  globalThis.document.getElementById('debug-btn').addEventListener('click', () => {
-    dbg.on = !dbg.on;
-    syncDebug();
-    AudioBus.click();
-  });
   globalThis.document.getElementById('juice').addEventListener('click', () => {
     const save = loadSave();
     const order = [1, 0.4, 0];
@@ -1998,113 +1977,8 @@ function bindInput() {
     else globalThis.document.exitFullscreen?.();
   });
 }
-function debugNote(text) {
-  if (player) popup(player.x + player.w / 2, player.y - 18, text, '#3ec1ff');
-}
-function debugOpenDoors() {
-  if (!level) return;
-  for (const door of level.doors) door.open = true;
-  debugNote('PUERTAS');
-}
-function debugClearBugs() {
-  if (!level || !run) return;
-  for (const enemy of level.enemies) enemy.dead = true;
-  level.enemies = [];
-  run.glitches = {};
-  debugNote('BUGS');
-}
-function debugWarpGoal() {
-  if (!level || !player || state === 'title') return;
-  if (level.boss && !level.exit) {
-    level.boss.hp = 0;
-    level.boss.stun = 0;
-    level.boss.dying = 2;
-    return;
-  }
-  if (!level.exit) return;
-  player.x = level.exit.x + 8;
-  player.y = level.exit.y + level.exit.h - player.h;
-  player.vx = 0;
-  player.vy = 0;
-  player.grounded = false;
-  snapCam = true;
-  debugNote('SALIDA');
-}
-function debugShiftLevel(dir) {
-  const ids = LevelBank.list.map((meta) => meta.id);
-  const cur = level ? ids.indexOf(level.id) : -1;
-  const next = ids[(cur + dir + ids.length) % ids.length];
-  startLevel(next);
-}
-function syncDebug() {
-  const el = globalThis.document.getElementById('debug');
-  const btn = globalThis.document.getElementById('debug-btn');
-  if (btn) btn.classList.toggle('on', dbg.on);
-  if (!el) return;
-  el.classList.toggle('hidden', !dbg.on);
-  if (!dbg.on) return;
-  const lines = ['DEBUG  ' + Math.round(fps) + ' fps'];
-  if (!player || !level) {
-    lines.push('menú');
-    lines.push('[ ] nivel');
-    el.textContent = lines.join('\n');
-    return;
-  }
-  const tx = Math.floor((player.x + player.w / 2) / TILE);
-  const ty = Math.floor((player.y + player.h) / TILE);
-  lines.push(level.id + '  ' + state);
-  lines.push('tile ' + tx + ',' + ty + '   ' + player.x.toFixed(0) + ',' + player.y.toFixed(0));
-  lines.push(
-    'vx ' + player.vx.toFixed(2) + '  vy ' + player.vy.toFixed(2)
-    + (player.grounded ? '  suelo' : '  aire'),
-  );
-  lines.push(
-    'mach ' + player.mach.toFixed(2)
-    + (dbg.god ? '  DIOS' : '')
-    + (dbg.fly ? '  VUELO' : ''),
-  );
-  if (level.doors.length) {
-    lines.push(level.doors.map((door, i) => (i + 1) + (door.open ? ' abierta' : ' cerrada')).join('  '));
-  }
-  const names = activeGlitchNames(run);
-  lines.push(names.length ? names.join(' · ') : 'sin glitches');
-  lines.push('G dios   N vuelo   H cajas');
-  lines.push('O puertas   K bugs   T salida');
-  lines.push('[ ] nivel');
-  el.textContent = lines.join('\n');
-}
-function onDebugKey(e) {
-  if (e.repeat) return false;
-  if (e.code === 'Backquote' || e.code === 'F3' || e.code === 'IntlBackslash') {
-    dbg.on = !dbg.on;
-    e.preventDefault();
-    return true;
-  }
-  if (!dbg.on) return false;
-  if (e.code === 'KeyH') dbg.boxes = !dbg.boxes;
-  else if (e.code === 'KeyG') {
-    dbg.god = !dbg.god;
-    debugNote(dbg.god ? 'DIOS' : 'GOLPE');
-  } else if (e.code === 'KeyN') {
-    dbg.fly = !dbg.fly;
-    if (player) {
-      player.vx = 0;
-      player.vy = 0;
-      if (!dbg.fly) player.invuln = 20;
-    }
-    debugNote(dbg.fly ? 'VUELO' : 'FISICA');
-  } else if (e.code === 'KeyO') debugOpenDoors();
-  else if (e.code === 'KeyK') debugClearBugs();
-  else if (e.code === 'KeyT') debugWarpGoal();
-  else if (e.code === 'BracketLeft') debugShiftLevel(-1);
-  else if (e.code === 'BracketRight') debugShiftLevel(1);
-  else return false;
-  e.preventDefault();
-  return true;
-}
 function onPress(e) {
   AudioBus.ensure();
-  if (onDebugKey(e)) return;
   if (state === 'title') {
     const digit = /^Digit([1-9])$/.exec(e.code) || /^Numpad([1-9])$/.exec(e.code);
     const n = digit ? Number(digit[1]) : 0;
@@ -2146,28 +2020,87 @@ function applyJuice() {
   btn.textContent = juice.level <= 0 ? 'no' : juice.level < 1 ? '½' : 'FX';
   btn.title = juice.level <= 0 ? 'Sin sacudida ni destellos' : juice.level < 1 ? 'Efectos suaves' : 'Efectos completos';
 }
+function isHandheld() {
+  const w = globalThis.innerWidth || DESKTOP_W;
+  const h = globalThis.innerHeight || DESKTOP_H;
+  const coarse = !!(globalThis.matchMedia && globalThis.matchMedia('(pointer: coarse)').matches);
+  return coarse || w < 900 || h < 500;
+}
+function layoutView(w, h) {
+  if (!isHandheld()) {
+    viewW = DESKTOP_W;
+    viewH = DESKTOP_H;
+    return;
+  }
+  const aspect = w / Math.max(1, h);
+  const minViewH = 220;
+  const maxTilesW = h > w ? 8 : 11;
+  let vw = maxTilesW * TILE;
+  let vh = vw / aspect;
+  if (vh < minViewH) {
+    vh = minViewH;
+    vw = vh * aspect;
+  }
+  const capW = 14 * TILE;
+  if (vw > capW) {
+    vw = capW;
+    vh = vw / aspect;
+  }
+  viewW = vw;
+  viewH = vh;
+}
+function placeBox(el, mode, scale) {
+  if (mode === 'fill') {
+    el.style.transform = 'none';
+    el.style.left = '0';
+    el.style.top = '0';
+    el.style.width = '100%';
+    el.style.height = '100%';
+    el.style.margin = '0';
+    return;
+  }
+  el.style.transform = 'scale(' + scale + ')';
+  el.style.left = '50%';
+  el.style.top = '50%';
+  el.style.width = DESKTOP_W + 'px';
+  el.style.height = DESKTOP_H + 'px';
+  el.style.margin = (-DESKTOP_H / 2) + 'px 0 0 ' + (-DESKTOP_W / 2) + 'px';
+}
 function fit() {
-  const s = Math.min(globalThis.innerWidth / VIEW_W, globalThis.innerHeight / VIEW_H);
-  frame.style.transform = 'scale(' + s + ')';
-  const phone = globalThis.innerWidth < 900 || s < 0.8;
+  const w = globalThis.innerWidth || DESKTOP_W;
+  const h = globalThis.innerHeight || DESKTOP_H;
+  const phone = isHandheld();
   globalThis.document.body.classList.toggle('phone', phone);
-  globalThis.document.querySelectorAll('.overlay').forEach((el) => {
-    if (phone) {
-      el.style.transform = 'none';
-      el.style.left = '0';
-      el.style.top = '0';
-      el.style.width = '100%';
-      el.style.height = '100%';
-      el.style.margin = '0';
-    } else {
-      el.style.transform = 'scale(' + s + ')';
-      el.style.left = '50%';
-      el.style.top = '50%';
-      el.style.width = VIEW_W + 'px';
-      el.style.height = VIEW_H + 'px';
-      el.style.margin = (-VIEW_H / 2) + 'px 0 0 ' + (-VIEW_W / 2) + 'px';
-    }
-  });
+  if (!phone) {
+    dpr = 1;
+    cssW = DESKTOP_W;
+    cssH = DESKTOP_H;
+    layoutView(w, h);
+    canvas.width = DESKTOP_W;
+    canvas.height = DESKTOP_H;
+    canvas.style.width = DESKTOP_W + 'px';
+    canvas.style.height = DESKTOP_H + 'px';
+    const s = Math.min(w / DESKTOP_W, h / DESKTOP_H);
+    placeBox(frame, 'stage', s);
+    frame.style.borderRadius = '18px';
+    globalThis.document.querySelectorAll('.overlay').forEach((el) => placeBox(el, 'stage', s));
+  } else {
+    dpr = Math.min(globalThis.devicePixelRatio || 1, 2);
+    cssW = w;
+    cssH = h;
+    layoutView(w, h);
+    canvas.width = Math.max(1, Math.round(w * dpr));
+    canvas.height = Math.max(1, Math.round(h * dpr));
+    canvas.style.width = '100%';
+    canvas.style.height = '100%';
+    placeBox(frame, 'fill');
+    frame.style.borderRadius = '0';
+    globalThis.document.querySelectorAll('.overlay').forEach((el) => placeBox(el, 'fill'));
+  }
+  if (player && level && state === 'play') {
+    snapCam = true;
+    updateCamera();
+  }
 }
 
 function releaseKeys() {
@@ -2399,27 +2332,13 @@ function runAutotest() {
   assert(fixedY - player.y > brokenHop + 8, 'el salto arreglado llega más alto');
 
   releaseKeys();
-  dbg.god = false;
-  dbg.fly = false;
   startLevel('hello');
   const deaths0 = run.deaths;
   player.y = level.h * TILE + 80;
   tickFrame();
   assert(run.deaths === deaths0 + 1, 'caer fuera respawnea');
-  dbg.god = true;
-  const deaths1 = run.deaths;
-  player.y = level.h * TILE + 80;
-  tickFrame();
-  assert(run.deaths === deaths1, 'modo dios no respawnea');
-  const hits0 = run.hits;
-  hurtPlayer(0);
-  assert(run.hits === hits0, 'modo dios ignora el golpe');
-  dbg.god = false;
-  debugOpenDoors();
-  assert(level.doors.every((door) => door.open), 'debug abre las puertas');
 
   releaseKeys();
-  dbg.fly = false;
   startLevel('hello');
   const ceilTx = Math.floor((player.x + 4) / TILE);
   const headTy = Math.floor(player.y / TILE);
@@ -2542,7 +2461,6 @@ function boot() {
   requestAnimationFrame(function loop(t) {
     loop.now = loop.now || t;
     const dt = t - loop.now;
-    if (dt > 0) fps += (1000 / dt - fps) * 0.12;
     loop.acc = (loop.acc || 0) + Math.min(48, dt);
     loop.now = t;
     while (loop.acc >= 1000 / 60) {

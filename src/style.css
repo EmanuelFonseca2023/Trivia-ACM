@@ -200,27 +200,6 @@ button, input { font-family: inherit; }
   white-space: nowrap;
 }
 
-#debug {
-  position: absolute;
-  top: 118px;
-  right: 12px;
-  z-index: 8;
-  width: 228px;
-  margin: 0;
-  padding: 8px 10px;
-  pointer-events: none;
-  font: 12px/1.4 ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
-  color: #d8fff4;
-  background: rgba(8, 6, 16, 0.86);
-  border: 2px solid var(--cyan);
-  border-radius: 10px;
-  white-space: pre-wrap;
-}
-
-#debug-btn.on {
-  background: var(--cyan);
-}
-
 #tools {
   position: fixed;
   top: max(10px, env(safe-area-inset-top));
@@ -530,6 +509,12 @@ button, input { font-family: inherit; }
 }
 
 #touch {
+  --btn: clamp(46px, 11vmin, 58px);
+  --jump: clamp(54px, 13vmin, 68px);
+  --gap: 8px;
+  --edge: max(10px, env(safe-area-inset-left));
+  --edge-r: max(10px, env(safe-area-inset-right));
+  --edge-b: max(10px, env(safe-area-inset-bottom));
   display: none;
   position: fixed;
   inset: 0;
@@ -540,14 +525,14 @@ button, input { font-family: inherit; }
 #touch button {
   pointer-events: auto;
   position: absolute;
-  width: 80px;
-  height: 80px;
-  border-radius: 22px;
-  border: 4px solid var(--ink);
-  background: rgba(255, 246, 228, 0.92);
-  box-shadow: 4px 4px 0 var(--ink);
+  width: var(--btn);
+  height: var(--btn);
+  border-radius: 14px;
+  border: 3px solid var(--ink);
+  background: rgba(255, 246, 228, 0.88);
+  box-shadow: 3px 3px 0 var(--ink);
   font-family: "Lilita One", "Arial Black", sans-serif;
-  font-size: 28px;
+  font-size: 20px;
   color: var(--ink);
   touch-action: none;
   user-select: none;
@@ -563,32 +548,31 @@ button, input { font-family: inherit; }
 #touch button { -webkit-tap-highlight-color: transparent; }
 
 #touch .left {
-  left: max(14px, env(safe-area-inset-left));
-  bottom: max(22px, env(safe-area-inset-bottom));
+  left: var(--edge);
+  bottom: var(--edge-b);
 }
 #touch .right {
-  left: calc(max(14px, env(safe-area-inset-left)) + 96px);
-  bottom: max(22px, env(safe-area-inset-bottom));
+  left: calc(var(--edge) + var(--btn) + var(--gap));
+  bottom: var(--edge-b);
 }
 #touch .jump {
-  right: max(14px, env(safe-area-inset-right));
-  bottom: max(22px, env(safe-area-inset-bottom));
-  width: 104px;
-  height: 104px;
-  font-size: 40px;
+  right: var(--edge-r);
+  bottom: var(--edge-b);
+  width: var(--jump);
+  height: var(--jump);
+  font-size: 26px;
 }
 #touch .down {
-  right: calc(max(14px, env(safe-area-inset-right)) + 120px);
-  bottom: max(22px, env(safe-area-inset-bottom));
+  right: calc(var(--edge-r) + var(--jump) + var(--gap));
+  bottom: var(--edge-b);
 }
 #touch .act {
-  right: max(14px, env(safe-area-inset-right));
-  bottom: calc(max(22px, env(safe-area-inset-bottom)) + 120px);
+  right: var(--edge-r);
+  bottom: calc(var(--edge-b) + var(--jump) + var(--gap));
 }
 
 @media (pointer: coarse), (hover: none), (max-width: 900px) {
   #touch:not(.hidden) { display: block; }
-  #tools button { width: 48px; height: 48px; font-size: 20px; }
 }
 
 body.phone #screen-title {
@@ -599,36 +583,45 @@ body.phone #screen-title {
     radial-gradient(circle at 50% 18%, #3a2158 0%, #140910 62%, #09060c 100%);
 }
 
+body.phone #frame {
+  border-radius: 0;
+  box-shadow: none;
+}
 body.phone .logo { font-size: 46px; -webkit-text-stroke-width: 4px; }
 body.phone .level-card { width: min(220px, 46vw); min-height: 76px; }
 body.phone .opt { min-height: 48px; font-size: 16px; }
+body.phone #hud {
+  padding: max(8px, env(safe-area-inset-top)) 12px 0 max(12px, env(safe-area-inset-left));
+}
+body.phone .score { font-size: 26px; }
+body.phone .timer { font-size: 22px; }
+body.phone .combo { font-size: 22px; }
+body.phone #tools { gap: 6px; }
+body.phone #tools button {
+  width: 36px;
+  height: 36px;
+  font-size: 15px;
+}
+body.phone .hud-top > div:first-child { max-width: 58%; }
+body.phone .hud-top > div:last-child { margin-right: 140px; }
+body.phone .level-name {
+  font-size: 12px;
+  white-space: nowrap;
+}
+body.phone .mach {
+  left: max(12px, env(safe-area-inset-left));
+  bottom: calc(max(10px, env(safe-area-inset-bottom)) + 62px);
+  top: auto;
+  width: min(120px, 30vw);
+}
+body.phone #prompt {
+  bottom: calc(max(10px, env(safe-area-inset-bottom)) + 68px);
+  font-size: 15px;
+  max-width: 42vw;
+}
 
 @media (max-width: 520px) {
   .opts { grid-template-columns: 1fr; }
-}
-
-@media (max-width: 480px) {
-  #touch button {
-    width: 70px;
-    height: 70px;
-    font-size: 26px;
-    border-radius: 18px;
-  }
-  #touch .left { left: max(12px, env(safe-area-inset-left)); }
-  #touch .right { left: calc(max(12px, env(safe-area-inset-left)) + 78px); }
-  #touch .jump {
-    width: 92px;
-    height: 92px;
-    font-size: 36px;
-    right: max(12px, env(safe-area-inset-right));
-  }
-  #touch .down { right: calc(max(12px, env(safe-area-inset-right)) + 104px); }
-  #touch .act {
-    width: 70px;
-    height: 70px;
-    right: max(12px, env(safe-area-inset-right));
-    bottom: calc(max(18px, env(safe-area-inset-bottom)) + 104px);
-  }
 }
 
 .crash {
