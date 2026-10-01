@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+  <title>Code Tower</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🟩</text></svg>">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Lilita+One&family=Nunito:wght@700;800&display=swap" rel="stylesheet">
+</head>
+<body>
+  <div id="frame">
+    <canvas id="c" width="960" height="540"></canvas>
+    <div id="hud" class="layer hidden"></div>
+    <pre id="debug" class="hidden"></pre>
+  </div>
+  <div id="screen-title" class="layer overlay"></div>
+  <div id="screen-trivia" class="layer overlay hidden"></div>
+  <div id="screen-pause" class="layer overlay hidden"></div>
+  <div id="screen-rank" class="layer overlay hidden"></div>
+  <div id="touch" class="hidden">
+    <button type="button" class="left" data-k="left" aria-label="Izquierda">←</button>
+    <button type="button" class="right" data-k="right" aria-label="Derecha">→</button>
+    <button type="button" class="down" data-k="down" aria-label="Golpe">▼</button>
+    <button type="button" class="jump" data-k="jump" aria-label="Saltar">▲</button>
+    <button type="button" class="act" data-k="action" aria-label="Responder">E</button>
+  </div>
+  <div id="tools">
+    <button type="button" id="debug-btn" aria-label="Debug">DBG</button>
+    <button type="button" id="juice" aria-label="Intensidad de efectos">FX</button>
+    <button type="button" id="mute" aria-label="Silencio">🔊</button>
+    <button type="button" id="full" aria-label="Pantalla completa">⛶</button>
+  </div>
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>
