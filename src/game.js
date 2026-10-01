@@ -302,7 +302,7 @@ function startLevel(id) {
 
 function updateCamera() {
   const look = player.vx * 14 * (viewW / DESKTOP_W);
-  const headroom = viewW < DESKTOP_W ? viewH * 0.12 : 24;
+  const headroom = viewW < DESKTOP_W ? Math.min(48, viewH * 0.06) : 24;
   let tx = player.x + player.w / 2 - viewW / 2 + look;
   let ty = player.y + player.h / 2 - viewH / 2 - headroom;
   const maxX = level.w * TILE - viewW;
@@ -1602,7 +1602,7 @@ function drawMarkers() {
       let y = m.y;
       if (viewW < DESKTOP_W) {
         x = Math.max(cam.x + 8, Math.min(x, cam.x + viewW - bw - 8));
-        const padTop = viewH > viewW ? 108 : 16;
+        const padTop = (viewH > viewW ? 92 : 40) * (viewH / Math.max(1, cssH));
         if (y - bh < cam.y + padTop) y = cam.y + padTop + bh;
         if (y > cam.y + viewH - 8) y = cam.y + viewH - 8;
       }
@@ -2032,19 +2032,12 @@ function layoutView(w, h) {
     viewH = DESKTOP_H;
     return;
   }
-  const aspect = w / Math.max(1, h);
-  const minViewH = 220;
-  const maxTilesW = h > w ? 8 : 11;
-  let vw = maxTilesW * TILE;
-  let vh = vw / aspect;
-  if (vh < minViewH) {
-    vh = minViewH;
-    vw = vh * aspect;
-  }
-  const capW = 14 * TILE;
-  if (vw > capW) {
-    vw = capW;
-    vh = vw / aspect;
+  const tilePx = 34;
+  let vw = (w / tilePx) * TILE;
+  let vh = (h / tilePx) * TILE;
+  if (vw > DESKTOP_W) {
+    vh *= DESKTOP_W / vw;
+    vw = DESKTOP_W;
   }
   viewW = vw;
   viewH = vh;
